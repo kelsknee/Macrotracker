@@ -112,8 +112,9 @@
   .recipe-name-input::placeholder { color:var(--border); }
 
   /* ── table ── */
-  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; }
   .table-wrap.purple-theme { border-color:var(--purple-border); }
+  .table-wrap table { min-width:680px; }
 
   table { width:100%; border-collapse:collapse; }
   thead { background:var(--surface2); }
@@ -438,12 +439,13 @@ function setField(key,id,field,raw){
   row[field]=field==='name'?raw:(parseFloat(raw)||0);
   recalcSection(key);
   recalcSummary();
+  save();
 }
 
 function renderSection(key){
   document.getElementById('body-'+key).innerHTML=state[key].rows.map(row=>`
     <tr id="row-${row.id}">
-      <td><input type="text" value="${row.name}" placeholder="ingredient name" oninput="setField('${key}',${row.id},'name',this.value)"></td>
+      <td><input type="text" value="${row.name.replace(/"/g,'&quot;')}" placeholder="ingredient name" oninput="setField('${key}',${row.id},'name',this.value)"></td>
       <td><input type="number" value="${row.f}" min="0" step="0.1" oninput="setField('${key}',${row.id},'f',this.value)" style="width:52px"></td>
       <td><input type="number" value="${row.c}" min="0" step="0.1" oninput="setField('${key}',${row.id},'c',this.value)" style="width:52px"></td>
       <td><input type="number" value="${row.p}" min="0" step="0.1" oninput="setField('${key}',${row.id},'p',this.value)" style="width:52px"></td>
@@ -459,9 +461,78 @@ function renderSection(key){
   recalcSummary();
 }
 
-init('A',defaultsA); init('B',defaultsB);
-renderSection('A'); renderSection('B');
-syncLabels();
+// ── persistence ──
+const STORAGE_KEY = 'macro-calc-v1';
+
+function save(){
+  const data = {
+    uid,
+    mode: currentMode,
+    nameA: document.getElementById('name-A').value,
+    nameB: document.getElementById('name-B').value,
+    tsvA:  document.getElementById('tsv-A').value,
+    tsvB:  document.getElementById('tsv-B').value,
+    twtA:  document.getElementById('twt-A').value,
+    twtB:  document.getElementById('twt-B').value,
+    svA:   document.getElementById('sv-A').value,
+    svB:   document.getElementById('sv-B').value,
+    gA:    document.getElementById('g-A').value,
+    gB:    document.getElementById('g-B').value,
+    rowsA: state.A.rows,
+    rowsB: state.B.rows,
+  };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){}
+}
+
+function load(){
+  let data;
+  try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch(e){}
+  if(!data) {
+    init('A',defaultsA); init('B',defaultsB);
+    renderSection('A'); renderSection('B');
+    syncLabels();
+    return;
+  }
+
+  uid = data.uid || 0;
+  state.A.rows = data.rowsA || [];
+  state.B.rows = data.rowsB || [];
+
+  document.getElementById('name-A').value = data.nameA || 'Stuffed Shells';
+  document.getElementById('name-B').value = data.nameB || 'Chicken Breast';
+  document.getElementById('tsv-A').value  = data.tsvA  || 6;
+  document.getElementById('tsv-B').value  = data.tsvB  || 1;
+  document.getElementById('twt-A').value  = data.twtA  || 0;
+  document.getElementById('twt-B').value  = data.twtB  || 0;
+  document.getElementById('sv-A').value   = data.svA   || 1;
+  document.getElementById('sv-B').value   = data.svB   || 1;
+  document.getElementById('g-A').value    = data.gA    || 200;
+  document.getElementById('g-B').value    = data.gB    || 200;
+
+  renderSection('A');
+  renderSection('B');
+  syncLabels();
+  if(data.mode && data.mode !== 'servings') setMode(data.mode);
+}
+
+// save on any footer/mode-bar input change
+['tsv-A','tsv-B','twt-A','twt-B','sv-A','sv-B','g-A','g-B'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', save);
+});
+document.getElementById('name-A').addEventListener('input', save);
+document.getElementById('name-B').addEventListener('input', save);
+
+// wrap setMode and addRow and delRow to also save
+const _setMode = setMode;
+setMode = function(m){ _setMode(m); save(); };
+
+const _addRow = addRow;
+addRow = function(k){ _addRow(k); save(); };
+
+const _delRow = delRow;
+delRow = function(k,id){ _delRow(k,id); save(); };
+
+load();
 </script>
 </body>
 </html>
